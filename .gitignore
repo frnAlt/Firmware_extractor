@@ -1,6 +1,14 @@
-__pycache__
-tmp
-out
+__pycache__/
+*.py[cod]
+tmp/
+out/
+work/
+dumps/
+*.tmp
+*.raw
+*.log
+.superpowers/
+.cache/
 tools/extract_android_ota_payload/
 tools/oppo_ozip_decrypt/
 tools/update_payload_extractor/
