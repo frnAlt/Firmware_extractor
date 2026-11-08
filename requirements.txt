@@ -1,7 +1,7 @@
 # Core Python dependencies for Firmware Extraction & AOSP Device Tree Generation
 aospdtgen>=1.0.0
 twrpdtgen>=2.0.0
-extract-dtb>=1.0.0
+extract-dtb>=1.2.3
 protobuf>=3.20.0
 pycryptodome>=3.15.0
 requests>=2.28.0
