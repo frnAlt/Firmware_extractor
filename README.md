@@ -1,113 +1,123 @@
-# Universal Firmware Extractor & AOSP Tree Generator
+# Universal Firmware Extractor, GitHub Dump Pusher & Multi-ROM Tree Generator
 
-[![GitHub Actions Workflow](https://img.shields.io/badge/GitHub%20Actions-Automated%20Workflow-blue?logo=github-actions)](.github/workflows/dump_and_generate.yml)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
+[![GitHub Actions Workflow](https://img.shields.io/badge/GitHub%20Actions-Automated%20Pipeline-blue?logo=github-actions)](.github/workflows/dump_and_generate.yml)
+[![Cloud ROM Build](https://img.shields.io/badge/Cloud%20ROM%20Build-Automated-green?logo=android)](.github/workflows/cloud_build.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-success.svg)](LICENSE)
 [![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-yellow?logo=python)](https://python.org)
-[![Android](https://img.shields.io/badge/Android-13%20%7C%2014%20%7C%2015-success?logo=android)](https://www.android.com)
+[![Android](https://img.shields.io/badge/Android-13%20%7C%2014%20%7C%2015-orange?logo=android)](https://www.android.com)
 
-A universal Android stock firmware dumper and automated AOSP / LineageOS device & vendor tree generator.
-
-Takes any stock OEM firmware package (payload.bin, super.img, TAR.MD5, OZIP, OFP, PAC, KDZ, RAW/Sparse), unpacks filesystems (EXT4, EROFS, F2FS), creates complete, bootable AOSP/LineageOS device and vendor trees, and automatically uploads the resulting source trees to GitHub.
+A production-grade, automated Android firmware extraction engine, GitHub dump publisher, and multi-ROM device tree generator designed for custom ROM maintainers and AOSP platform engineers.
 
 ---
 
-## ⚡ Highlights & Features
+## 🏛️ 4-Module Core Architecture
 
-- **Universal Firmware Unpacking**:
-  - `payload.bin` (A/B and Virtual A/B OTA packages via `payload-dumper-go` & `otadump`).
-  - `super.img` with Dynamic Partitions (unsparse via `simg2img`, unpack via `lpunpack`).
-  - Samsung `TAR.MD5` and LZ4 decompression.
-  - OPPO / Realme `OZIP` & `OFP` decrypted using community keys.
-  - Unisoc `PAC`, LG `KDZ`, Sony `FTF`/`SIN`, Motorola sparse chunks, HTC `RUU`, Huawei `UPDATE.APP`.
-- **Filesystem & Boot Extraction**:
-  - EROFS extraction without root privileges via `fsck.erofs --extract`.
-  - EXT4 partition extraction via `7z` and `ext2rd`.
-  - Android Boot Image inspection (`boot.img`, `vendor_boot.img`, `recovery.img`) with ramdisk unpacking and DTB extraction (`extract-dtb`).
-- **Complete AOSP & LineageOS Tree Synthesis**:
-  - Auto-generates complete, syntax-valid `AndroidProducts.mk`, `BoardConfig.mk`, `device.mk`, `lineage_<codename>.mk`.
-  - Extracts and curates critical boot HALs into `proprietary-files.txt` (Gralloc, DRM, RIL, Audio, Power, Health, Sensors).
-  - Populates vendor tree `vendor/<brand>/<codename>` with extracted proprietary blobs, `Android.mk`, and `<codename>-vendor.mk`.
-- **Automated GitHub Deployment**:
-  - Automatically initializes git repositories (`device_<brand>_<codename>`, `vendor_<brand>_<codename>`).
-  - Commits with rich metadata (Fingerprint, Security Patch, Android Version, Kernel).
-  - Pushes to GitHub via GitHub CLI (`gh`) or personal access token.
-- **Ready for GitHub Actions**:
-  - 1-click cloud execution via `workflow_dispatch`.
-  - Automatic runner disk cleanup freeing 35GB+ of NVMe space for large firmwares.
-  - Downloadable artifacts and summary reports.
+```text
+Firmware_extractor/
+├── main.py                     # Master Orchestrator CLI
+├── run.sh                      # Universal runner entrypoint
+├── setup_env.sh                # Toolchain & environment installer
+│
+├── extractor/                  # MODULE 1: Universal Extractor & Metadata Parser
+│   ├── firmware_engine.py      # Downloads & unpacks payload.bin, super.img, TAR.MD5, EROFS, EXT4
+│   ├── boot_engine.py          # Unpacks boot.img/vendor_boot, extracts kernel, ikconfig, dtc dts
+│   └── metadata_parser.py      # Aggregates build.prop, generates all_files.txt & board-info.txt
+│
+├── github_pusher/              # MODULE 2: Automated GitHub Dump & Release Pusher
+│   └── dump_pusher.py          # Auto repo creator, Git LFS (>50MB), batch commits, Release uploads
+│
+├── tree_generator/             # MODULE 3: Multi-ROM Tree & Vendor Generator
+│   ├── device_tree.py          # Generates BoardConfig.mk, device.mk, AndroidProducts.mk, fstab, init.rc
+│   ├── vendor_tree.py          # Scans VINTF & ELF dependencies, builds proprietary-files.txt & blobs
+│   ├── kernel_tree.py          # Packages prebuilt kernel, dtb.img, dtbo.img, and vendor_dlkm modules
+│   └── overlay_extractor.py    # Decompiles framework-res.apk via apktool to generate accurate RRO config.xml
+│
+├── rom_adapter/                # Multi-ROM Flavor Adapters
+│   └── adapter.py              # Adapts trees to LineageOS, PixelOS, crDroid, Evolution X, or TWRP
+│
+├── manifest_builder/           # MODULE 4: Local Manifest & Cloud Build Trigger
+│   └── roomservice.py          # Generates .repo/local_manifests/roomservice.xml
+│
+└── .github/workflows/
+    ├── dump_and_generate.yml   # Firmware dump & tree generation workflow
+    └── cloud_build.yml         # Cloud ROM compilation workflow (mka bacon)
+```
 
 ---
 
-## 🚀 Quickstart via GitHub Actions (Cloud)
+## 🚀 Cloud Execution via GitHub Actions
 
-You can run the entire pipeline directly in GitHub Actions without installing anything locally:
+Run the entire pipeline in the cloud without installing any local dependencies:
 
-1. Go to the **Actions** tab of your repository.
-2. Select **Universal Firmware Extractor & AOSP Tree Generator**.
-3. Click **Run workflow** and provide:
-   - **Firmware URL**: Direct link to your firmware (`.zip`, `.tar.md5`, `payload.bin`, Google Drive, SourceForge, etc.).
-   - **Target account**: Your GitHub username or organization where trees should be pushed.
+### 1. Extract Firmware & Generate Trees
+1. Open the [**Universal Firmware Extractor & AOSP Tree Generator**](.github/workflows/dump_and_generate.yml) workflow.
+2. Click **Run workflow** and enter:
+   - **Firmware URL**: Direct link to your stock ROM, OTA, Google Drive, or SourceForge file.
+   - **Target account**: Your GitHub username or organization.
    - **Branch**: Default `lineage-21.0`.
-4. Click **Run workflow**. In minutes, your `device_<brand>_<codename>` and `vendor_<brand>_<codename>` repositories will be created and pushed to your GitHub!
+3. In minutes, your `dump_<brand>_<codename>`, `device_<brand>_<codename>`, `vendor_<brand>_<codename>`, and `kernel_<brand>_<codename>` repositories will be created and pushed!
 
-> **Note**: For automated repository creation and pushing, add a Personal Access Token (`GH_TOKEN` or `PAT`) with `repo` permissions to your repository Secrets (**Settings** -> **Secrets and variables** -> **Actions**).
+### 2. Trigger Cloud ROM Compilation
+1. Open the [**Cloud ROM Build Trigger**](.github/workflows/cloud_build.yml) workflow.
+2. Select your target ROM (`lineageos`, `pixelos`, `crdroid`, or `evolutionx`), brand, and codename.
+3. The workflow injects the generated `roomservice.xml`, syncs sources, and triggers the build.
 
 ---
 
-## 💻 Local Installation & CLI Usage
+## 💻 Local CLI Usage
 
-### 1. Setup Dependencies
+### Setup Environment
 ```bash
-git clone --recurse-submodules https://github.com/AndroidDumps/Firmware_extractor.git
+git clone --recurse-submodules https://github.com/frnAlt/Firmware_extractor.git
 cd Firmware_extractor
-chmod +x setup_env.sh run.sh scripts/*.sh
+chmod +x setup_env.sh run.sh main.py scripts/*.sh
 ./setup_env.sh
 ```
 
-### 2. Run Master Orchestrator
-
-#### From a Firmware URL:
+### Run Full Pipeline from Firmware URL
 ```bash
-./run.sh --url "https://example.com/firmware.zip" --push-github --target-org "yourusername"
+python3 main.py --url "https://example.com/stock_firmware.zip" \
+               --rom-type all \
+               --push-github \
+               --target-org "frnAlt" \
+               --lfs \
+               --generate-manifest
 ```
 
-#### From a Local File:
+### Run on Local Firmware Package
 ```bash
-./run.sh --file /path/to/stock_firmware.tar.md5
+python3 main.py --path /path/to/stock_rom.tar.md5 --rom-type lineageos
 ```
 
-#### From an Existing Filesystem Dump:
+### Generate Trees from an Existing Dump
 ```bash
-./run.sh --dump-dir out/dump --out out/
-```
-
-### Options Reference:
-```text
-Input Options:
-  -u, --url <URL>            Direct firmware URL, Google Drive, SourceForge, etc.
-  -f, --file <PATH>          Path to local stock firmware archive or image file.
-  -d, --dump-dir <PATH>      Use an already extracted filesystem dump directory.
-
-Generation & Deployment:
-  -o, --out <DIR>            Output root directory (default: out/).
-      --no-trees             Skip AOSP & LineageOS device/vendor tree generation.
-      --push-github          Automatically create/push device & vendor trees to GitHub.
-      --target-org <USER>    Target GitHub user or organization.
-      --token <TOKEN>        GitHub personal access token (GH_TOKEN).
-      --branch <BRANCH>      Git branch for trees (default: lineage-21.0).
-      --dry-run              Dry run mode for GitHub operations (no actual network push).
+python3 main.py --dump-dir out/dump --rom-type pixelos --generate-manifest
 ```
 
 ---
 
-## 📖 Building Your Custom ROM
+## ⚙️ CLI Options Reference
 
-Once your trees are generated, consult the **[Complete AOSP & LineageOS Bringup Guide](GUIDE.md)** for step-by-step instructions on:
-- Configuring dynamic partitions and sizing in `BoardConfig.mk`.
-- Fixing `fstab` first-stage mount and file encryption parameters.
-- Integrating prebuilt kernel & DTB.
-- Resolving SELinux policy denials (`avc: denied`).
-- Compiling LineageOS with `mka bacon`.
+| Option | Description |
+|---|---|
+| `-u, --url <URL>` | Direct link to stock firmware (Fastboot, Recovery OTA, payload.bin, Google Drive, etc.) |
+| `-f, --path <FILE>` | Path to local firmware archive or partition file |
+| `-d, --dump-dir <DIR>` | Skip extraction and generate trees from an existing filesystem dump |
+| `-o, --out <DIR>` | Output directory (default: `out/`) |
+| `--rom-type <ROM>` | Target Custom ROM flavor (`lineageos`, `pixelos`, `crdroid`, `evolutionx`, `twrp`, `all`) |
+| `--push-github` | Automatically create repositories and push dumps & trees to GitHub |
+| `--target-org <USER>` | GitHub username or organization |
+| `--branch <BRANCH>` | Git branch name (default: `lineage-21.0`) |
+| `--lfs` | Enable Git LFS tracking for files >50MB |
+| `--no-trees` | Skip device/vendor tree generation |
+| `--generate-manifest`| Generate `.repo/local_manifests/roomservice.xml` |
+| `--dry-run` | Simulate all git operations and repository creations without pushing |
+
+---
+
+## 📖 Custom ROM Bringup & Troubleshooting
+
+For comprehensive guidance on dynamic partition sizing (`BOARD_SUPER_PARTITION_GROUPS`), `fstab` encryption flags, prebuilt kernel/DTB integration, and resolving SELinux policy denials, see the **[Complete AOSP & LineageOS Bringup Guide](GUIDE.md)**.
 
 ---
 
