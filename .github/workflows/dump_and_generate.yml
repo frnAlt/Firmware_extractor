@@ -96,7 +96,7 @@ jobs:
 
       - name: Archive and Upload Device Tree Artifact
         if: ${{ inputs.generate_trees }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: aosp-device-tree
           path: out/trees/device/
@@ -104,7 +104,7 @@ jobs:
 
       - name: Archive and Upload Vendor Tree Artifact
         if: ${{ inputs.generate_trees }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: aosp-vendor-tree
           path: out/trees/vendor/
