@@ -45,7 +45,7 @@ jobs:
           cat out/rro_overlay/frameworks/base/core/res/res/values/config.xml
 
       - name: Upload Overlay Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: hardware-rro-overlays
           path: out/rro_overlay/

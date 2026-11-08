@@ -93,21 +93,21 @@ jobs:
           python3 main.py "${CMD_ARGS[@]}"
 
       - name: Upload Device Tree Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: device-tree-${{ inputs.rom_type }}
           path: out/trees/device/
           if-no-files-found: ignore
 
       - name: Upload Vendor Tree Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vendor-tree
           path: out/trees/vendor/
           if-no-files-found: ignore
 
       - name: Upload Kernel Tree Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: kernel-tree
           path: out/trees/kernel/
@@ -115,7 +115,7 @@ jobs:
 
       - name: Upload Roomservice Manifest Artifact
         if: ${{ inputs.generate_manifest }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: roomservice-manifest
           path: out/roomservice.xml
