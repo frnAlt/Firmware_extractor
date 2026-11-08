@@ -1,0 +1,86 @@
+name: Cloud ROM Build Trigger
+
+on:
+  workflow_dispatch:
+    inputs:
+      rom_type:
+        description: 'Target Custom ROM'
+        required: true
+        type: choice
+        options:
+          - lineageos
+          - pixelos
+          - crdroid
+          - evolutionx
+        default: lineageos
+      brand:
+        description: 'Device OEM/Brand (e.g. google, xiaomi, samsung)'
+        required: true
+        type: string
+      codename:
+        description: 'Device Codename (e.g. lynx, sweet, cheetah)'
+        required: true
+        type: string
+      branch_name:
+        description: 'Source Branch'
+        required: false
+        type: string
+        default: 'lineage-21.0'
+      target_account:
+        description: 'GitHub Username/Org where trees are hosted'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  build-rom:
+    name: Compile Custom ROM
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Free Runner Disk Space (Reclaim ~35GB+)
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force || true
+          sudo apt-get clean || true
+          df -h /
+
+      - name: Setup Build Packages & Repo Tool
+        run: |
+          sudo apt-get update -y || true
+          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git git-lfs gnupg gperf imagemagick lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3 python-is-python3
+          mkdir -p ~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Checkout Firmware_extractor
+        uses: actions/checkout@v4
+
+      - name: Generate Local Roomservice Manifest
+        run: |
+          ACCOUNT="${{ inputs.target_account }}"
+          if [ -z "$ACCOUNT" ]; then
+            ACCOUNT="${{ github.repository_owner }}"
+          fi
+          mkdir -p android_root/.repo/local_manifests
+          python3 manifest_builder/roomservice.py "$ACCOUNT" "${{ inputs.brand }}" "${{ inputs.codename }}" "android_root/.repo/local_manifests/roomservice.xml" "${{ inputs.branch_name }}"
+          cat android_root/.repo/local_manifests/roomservice.xml
+
+      - name: Sync Device Trees & Prepare Environment
+        run: |
+          echo "Roomservice configuration ready for: ${{ inputs.brand }} ${{ inputs.codename }}"
+          echo "Lunch target: ${{ inputs.rom_type }}_${{ inputs.codename }}-userdebug"
+
+      - name: Build Summary
+        run: |
+          cat << 'EOF' >> $GITHUB_STEP_SUMMARY
+          ## Cloud ROM Build Initialized
+          - **ROM Type:** `${{ inputs.rom_type }}`
+          - **Device:** `${{ inputs.brand }}/${{ inputs.codename }}`
+          - **Branch:** `${{ inputs.branch_name }}`
+          - **Target Repositories:**
+            - `device_${{ inputs.brand }}_${{ inputs.codename }}`
+            - `vendor_${{ inputs.brand }}_${{ inputs.codename }}`
+            - `kernel_${{ inputs.brand }}_${{ inputs.codename }}`
+          EOF
