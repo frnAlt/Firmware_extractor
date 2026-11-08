@@ -1,0 +1,96 @@
+name: TWRP & OrangeFox Recovery Tree Generator
+
+on:
+  workflow_dispatch:
+    inputs:
+      recovery_image_url:
+        description: 'Direct download URL to recovery.img or boot.img'
+        required: true
+        type: string
+      push_to_github:
+        description: 'Automatically push recovery tree to GitHub (device_<brand>_<codename>-twrp)'
+        required: true
+        type: boolean
+        default: true
+      target_account:
+        description: 'Target GitHub username or organization (leave blank for repository owner)'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  build-recovery-tree:
+    name: Generate TWRP Recovery Tree
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Dependencies
+        run: |
+          sudo apt-get update -y || true
+          sudo apt-get install -y python3 python3-pip curl cpio
+          pip3 install --upgrade pip twrpdtgen --break-system-packages 2>/dev/null || pip3 install twrpdtgen
+
+      - name: Download Recovery/Boot Image
+        run: |
+          mkdir -p work/recovery_input
+          curl -L -C - --retry 3 -o work/recovery_input/recovery.img "${{ inputs.recovery_image_url }}"
+          ls -lh work/recovery_input/
+
+      - name: Generate TWRP Device Tree
+        run: |
+          mkdir -p out/twrp_tree
+          python3 -m twrpdtgen work/recovery_input/recovery.img --output out/twrp_tree || {
+            echo "[INFO] Running custom recovery generator fallback..."
+            python3 tree_generator/device_tree.py work/recovery_input out/twrp_tree
+            python3 rom_adapter/adapter.py out/twrp_tree "{\"brand\": \"generic\", \"codename\": \"device\"}" || true
+          }
+          find out/twrp_tree -maxdepth 3
+
+      - name: Push Recovery Tree to GitHub
+        if: ${{ inputs.push_to_github }}
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          TARGET="${{ inputs.target_account }}"
+          if [ -z "$TARGET" ]; then
+            TARGET="${{ github.repository_owner }}"
+          fi
+          # Find generated tree root
+          TREE_PATH=$(find out/twrp_tree -name "BoardConfig.mk" -exec dirname {} \; | head -n 1)
+          if [ -n "$TREE_PATH" ] && [ -d "$TREE_PATH" ]; then
+            cd "$TREE_PATH"
+            git init -b master
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "twrp: Initial recovery device tree"
+            REPO_NAME="device_recovery_tree"
+            if command -v gh >/dev/null 2>&1; then
+              gh repo create "$TARGET/$REPO_NAME" --public --confirm || true
+              git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/$TARGET/$REPO_NAME.git"
+              git push -u origin master --force || true
+            fi
+          fi
+
+      - name: Upload Recovery Tree Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: twrp-recovery-tree
+          path: out/twrp_tree/
+
+      - name: Post Job Summary
+        run: |
+          cat << 'EOF' >> $GITHUB_STEP_SUMMARY
+          ## TWRP / OrangeFox Recovery Tree Generated
+          - **Input:** `${{ inputs.recovery_image_url }}`
+          - **Pushed to GitHub:** `${{ inputs.push_to_github }}`
+          - **Target Account:** `${{ inputs.target_account || github.repository_owner }}`
+
+          Download the generated recovery tree from the workflow artifacts above!
+          EOF

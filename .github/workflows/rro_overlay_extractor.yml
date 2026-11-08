@@ -1,0 +1,64 @@
+name: RRO Hardware Overlay Extractor
+
+on:
+  workflow_dispatch:
+    inputs:
+      framework_apk_url:
+        description: 'Direct download URL to framework-res.apk or system partition'
+        required: true
+        type: string
+      systemui_apk_url:
+        description: 'Direct download URL to SystemUI.apk (optional)'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  extract-overlay:
+    name: Extract RRO config.xml Overlays
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Apktool & Java
+        run: |
+          sudo apt-get update -y || true
+          sudo apt-get install -y default-jre curl python3
+          sudo curl -L https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool -o /usr/local/bin/apktool
+          sudo curl -L https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar -o /usr/local/bin/apktool.jar
+          sudo chmod +x /usr/local/bin/apktool /usr/local/bin/apktool.jar
+
+      - name: Download Framework APKs
+        run: |
+          mkdir -p work/apks
+          curl -L -C - --retry 3 -o work/apks/framework-res.apk "${{ inputs.framework_apk_url }}"
+          if [ -n "${{ inputs.systemui_apk_url }}" ]; then
+            curl -L -C - --retry 3 -o work/apks/SystemUI.apk "${{ inputs.systemui_apk_url }}"
+          fi
+          ls -lh work/apks/
+
+      - name: Execute Overlay Extractor
+        run: |
+          mkdir -p out/rro_overlay
+          python3 tree_generator/overlay_extractor.py work/apks out/rro_overlay
+          cat out/rro_overlay/frameworks/base/core/res/res/values/config.xml
+
+      - name: Upload Overlay Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardware-rro-overlays
+          path: out/rro_overlay/
+
+      - name: Post Job Summary
+        run: |
+          cat << 'EOF' >> $GITHUB_STEP_SUMMARY
+          ## Hardware Resource Overlays (RRO) Extracted
+          - Minimum & Maximum Screen Brightness
+          - Auto Brightness LCD Curve & Levels
+          - Display Cutout Paths & Rounded Corners
+          - Ambient Display (Doze / AOD) Flags
+          - Software Navigation Bar Flag
+
+          Download the generated `config.xml` overlay package from the artifacts above!
+          EOF

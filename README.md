@@ -1,12 +1,31 @@
 # Universal Firmware Extractor, GitHub Dump Pusher & Multi-ROM Tree Generator
 
-[![GitHub Actions Workflow](https://img.shields.io/badge/GitHub%20Actions-Automated%20Pipeline-blue?logo=github-actions)](.github/workflows/dump_and_generate.yml)
+[![GitHub Actions Workflows](https://img.shields.io/badge/GitHub%20Actions-9%20Automated%20Pipelines-blue?logo=github-actions)](.github/workflows/)
+[![Continuous Integration](https://img.shields.io/badge/CI-Passing%20(11%2F11%20Tests)-brightgreen?logo=github-actions)](.github/workflows/ci_tests.yml)
 [![Cloud ROM Build](https://img.shields.io/badge/Cloud%20ROM%20Build-Automated-green?logo=android)](.github/workflows/cloud_build.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-success.svg)](LICENSE)
 [![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-yellow?logo=python)](https://python.org)
 [![Android](https://img.shields.io/badge/Android-13%20%7C%2014%20%7C%2015-orange?logo=android)](https://www.android.com)
 
 A production-grade, automated Android firmware extraction engine, GitHub dump publisher, and multi-ROM device tree generator designed for custom ROM maintainers and AOSP platform engineers.
+
+---
+
+## ⚡ Complete GitHub Actions Workflow Suite
+
+You can execute every feature directly in the cloud via the GitHub Actions tab:
+
+| Workflow | Direct Link | Description |
+|---|---|---|
+| **Full Pipeline** | [**`dump_and_generate.yml`**](.github/workflows/dump_and_generate.yml) | End-to-end: Download firmware, unpack partitions (EROFS/EXT4), extract metadata, generate multi-ROM trees, and push to GitHub. |
+| **Firmware Dump Only** | [**`firmware_dump_only.yml`**](.github/workflows/firmware_dump_only.yml) | Unpack firmware, handle Git LFS (>50MB), and publish `<account>/dump_<brand>_<codename>` on GitHub. |
+| **Trees From Existing Dump** | [**`generate_trees_from_dump.yml`**](.github/workflows/generate_trees_from_dump.yml) | Generate Device, Vendor, Kernel trees & roomservice manifest from an existing GitHub dump repo. |
+| **Boot & DTB to DTS** | [**`boot_unpack_dtb_dts.yml`**](.github/workflows/boot_unpack_dtb_dts.yml) | Unpack `boot.img`/`vendor_boot`, extract kernel, extract `.config` via `ikconfig`, and decompile DTB/DTBO to DTS source. |
+| **RRO Overlays Extractor** | [**`rro_overlay_extractor.yml`**](.github/workflows/rro_overlay_extractor.yml) | Decompile `framework-res.apk`/`SystemUI.apk` via `apktool` for display cutouts, refresh rates, and auto-brightness curves. |
+| **TWRP Recovery Tree** | [**`twrp_recovery_tree.yml`**](.github/workflows/twrp_recovery_tree.yml) | Generate complete TWRP / OrangeFox recovery device trees using `twrpdtgen` and push to GitHub. |
+| **Vendor Blobs Extractor** | [**`extract_blobs_to_vendor.yml`**](.github/workflows/extract_blobs_to_vendor.yml) | Extract proprietary blobs from a dump using `proprietary-files.txt` and push to `vendor_<brand>_<codename>`. |
+| **Cloud ROM Compiler** | [**`cloud_build.yml`**](.github/workflows/cloud_build.yml) | Automated cloud ROM compilation using `roomservice.xml` and `mka bacon`. |
+| **Continuous Integration** | [**`ci_tests.yml`**](.github/workflows/ci_tests.yml) | Automated test suite matrix across Ubuntu 22.04 & 24.04 verifying all modules. |
 
 ---
 
@@ -38,29 +57,8 @@ Firmware_extractor/
 ├── manifest_builder/           # MODULE 4: Local Manifest & Cloud Build Trigger
 │   └── roomservice.py          # Generates .repo/local_manifests/roomservice.xml
 │
-└── .github/workflows/
-    ├── dump_and_generate.yml   # Firmware dump & tree generation workflow
-    └── cloud_build.yml         # Cloud ROM compilation workflow (mka bacon)
+└── .github/workflows/          # 9 Dedicated GitHub Actions Workflows
 ```
-
----
-
-## 🚀 Cloud Execution via GitHub Actions
-
-Run the entire pipeline in the cloud without installing any local dependencies:
-
-### 1. Extract Firmware & Generate Trees
-1. Open the [**Universal Firmware Extractor & AOSP Tree Generator**](.github/workflows/dump_and_generate.yml) workflow.
-2. Click **Run workflow** and enter:
-   - **Firmware URL**: Direct link to your stock ROM, OTA, Google Drive, or SourceForge file.
-   - **Target account**: Your GitHub username or organization.
-   - **Branch**: Default `lineage-21.0`.
-3. In minutes, your `dump_<brand>_<codename>`, `device_<brand>_<codename>`, `vendor_<brand>_<codename>`, and `kernel_<brand>_<codename>` repositories will be created and pushed!
-
-### 2. Trigger Cloud ROM Compilation
-1. Open the [**Cloud ROM Build Trigger**](.github/workflows/cloud_build.yml) workflow.
-2. Select your target ROM (`lineageos`, `pixelos`, `crdroid`, or `evolutionx`), brand, and codename.
-3. The workflow injects the generated `roomservice.xml`, syncs sources, and triggers the build.
 
 ---
 

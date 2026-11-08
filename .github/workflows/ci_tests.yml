@@ -1,0 +1,33 @@
+name: Continuous Integration & Verification
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-matrix:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-22.04, ubuntu-24.04 ]
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Toolchain & Dependencies
+        run: |
+          chmod +x setup_env.sh run.sh main.py scripts/*.sh tests/*.sh tests/*.py
+          ./setup_env.sh
+
+      - name: Execute 11-Component Test Suite
+        run: |
+          ./tests/test_components.sh

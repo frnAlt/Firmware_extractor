@@ -1,0 +1,110 @@
+name: Extract Proprietary Blobs to Vendor Tree
+
+on:
+  workflow_dispatch:
+    inputs:
+      device_tree_url:
+        description: 'Git URL to device tree containing proprietary-files.txt'
+        required: true
+        type: string
+      dump_source_url:
+        description: 'Direct download URL to firmware dump archive or folder'
+        required: true
+        type: string
+      push_to_github:
+        description: 'Push generated vendor tree to GitHub (vendor_<brand>_<codename>)'
+        required: true
+        type: boolean
+        default: true
+      target_account:
+        description: 'Target GitHub username or organization (leave blank for repository owner)'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  extract-vendor:
+    name: Extract Blobs & Push Vendor Tree
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Dependencies
+        run: |
+          chmod +x setup_env.sh run.sh main.py scripts/*.sh
+          ./setup_env.sh
+
+      - name: Clone Device Tree
+        run: |
+          mkdir -p work/device_tree
+          git clone --depth 1 "${{ inputs.device_tree_url }}" work/device_tree
+          ls -la work/device_tree
+
+      - name: Download and Unpack Dump Archive
+        run: |
+          mkdir -p work/dump_input out/dump
+          curl -L -C - --retry 3 -o work/dump_input/dump_archive.zip "${{ inputs.dump_source_url }}"
+          7z x -y work/dump_input/dump_archive.zip -oout/dump >/dev/null 2>&1 || true
+
+      - name: Extract Vendor Blobs & Synthesize Vendor Tree
+        run: |
+          mkdir -p out/vendor_tree
+          python3 - << 'PYEOF'
+          import os, sys
+          from tree_generator.vendor_tree import VendorTreeGenerator
+          from extractor.metadata_parser import MetadataParser
+
+          meta = MetadataParser('out/dump').extract_metadata()
+          gen = VendorTreeGenerator('out/dump', meta)
+          out_dir = gen.generate('out/vendor_tree')
+          print(f'Generated vendor tree: {out_dir}')
+          PYEOF
+
+      - name: Push Vendor Tree to GitHub
+        if: ${{ inputs.push_to_github }}
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          TARGET="${{ inputs.target_account }}"
+          if [ -z "$TARGET" ]; then
+            TARGET="${{ github.repository_owner }}"
+          fi
+          V_PATH=$(find out/vendor_tree/vendor -name "Android.mk" -exec dirname {} \; | head -n 1)
+          if [ -n "$V_PATH" ] && [ -d "$V_PATH" ]; then
+            cd "$V_PATH"
+            git init -b master
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "vendor: Initial proprietary vendor blobs"
+            REPO_NAME="$(basename $(dirname $V_PATH))_$(basename $V_PATH)"
+            FULL_REPO="vendor_${REPO_NAME}"
+            if command -v gh >/dev/null 2>&1; then
+              gh repo create "$TARGET/$FULL_REPO" --public --confirm || true
+              git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/$TARGET/$FULL_REPO.git"
+              git push -u origin master --force || true
+            fi
+          fi
+
+      - name: Upload Vendor Tree Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: proprietary-vendor-tree
+          path: out/vendor_tree/
+
+      - name: Post Job Summary
+        run: |
+          cat << 'EOF' >> $GITHUB_STEP_SUMMARY
+          ## Proprietary Vendor Tree Extracted
+          - **Device Tree:** `${{ inputs.device_tree_url }}`
+          - **Dump Source:** `${{ inputs.dump_source_url }}`
+          - **Pushed to GitHub:** `${{ inputs.push_to_github }}`
+          - **Target Account:** `${{ inputs.target_account || github.repository_owner }}`
+
+          Proprietary blobs matched, copied, and indexed with `Android.mk`, `Android.bp`, and `<codename>-vendor.mk`.
+          EOF

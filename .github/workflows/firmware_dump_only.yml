@@ -1,0 +1,105 @@
+name: Firmware Dump & GitHub Publisher Only
+
+on:
+  workflow_dispatch:
+    inputs:
+      firmware_url:
+        description: 'Direct URL to Stock Firmware (OTA zip, payload.bin, TAR.MD5, OZIP, PAC, Google Drive, SourceForge)'
+        required: true
+        type: string
+      target_account:
+        description: 'Target GitHub username or organization for dump repository (leave blank for repository owner)'
+        required: false
+        type: string
+        default: ''
+      branch_name:
+        description: 'Git branch name (e.g. master or firmware build ID)'
+        required: false
+        type: string
+        default: 'master'
+      use_lfs:
+        description: 'Enable Git LFS for files >50MB'
+        required: false
+        type: boolean
+        default: true
+      upload_release_assets:
+        description: 'Attach oversized raw partition images to GitHub Releases'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  dump-firmware:
+    name: Download & Push Raw Dump
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Free Runner Disk Space (~35GB+)
+        run: |
+          echo "=== Disk Space Before Cleanup ==="
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL "$AGENT_TOOLSDIRECTORY"
+          sudo docker image prune --all --force || true
+          sudo apt-get clean || true
+          echo "=== Disk Space After Cleanup ==="
+          df -h /
+
+      - name: Setup Toolchain & Dependencies
+        run: |
+          chmod +x setup_env.sh run.sh main.py scripts/*.sh
+          ./setup_env.sh
+
+      - name: Extract Firmware & Push Dump Repo
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          TARGET="${{ inputs.target_account }}"
+          if [ -z "$TARGET" ]; then
+            TARGET="${{ github.repository_owner }}"
+          fi
+
+          CMD_ARGS=(
+            --url "${{ inputs.firmware_url }}"
+            --no-trees
+            --push-github
+            --target-org "$TARGET"
+            --branch "${{ inputs.branch_name }}"
+          )
+
+          if [ "${{ inputs.use_lfs }}" = "true" ]; then
+            CMD_ARGS+=(--lfs)
+          fi
+
+          python3 main.py "${CMD_ARGS[@]}"
+
+      - name: Upload Metadata Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dump-metadata-indexes
+          path: |
+            out/dump/all_files.txt
+            out/dump/board-info.txt
+            out/dump/metadata.json
+          if-no-files-found: ignore
+
+      - name: Post Job Summary
+        run: |
+          cat << 'EOF' >> $GITHUB_STEP_SUMMARY
+          ## Firmware Dump Finished
+          - **Firmware URL:** `${{ inputs.firmware_url }}`
+          - **Target Account:** `${{ inputs.target_account || github.repository_owner }}`
+          - **Branch:** `${{ inputs.branch_name }}`
+          - **Git LFS Enabled:** `${{ inputs.use_lfs }}`
+
+          The firmware partitions have been unpacked (EROFS/EXT4) and pushed to GitHub!
+          EOF

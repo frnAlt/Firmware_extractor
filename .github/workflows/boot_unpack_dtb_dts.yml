@@ -1,0 +1,67 @@
+name: Boot Image Unpacker & DTB to DTS Decompiler
+
+on:
+  workflow_dispatch:
+    inputs:
+      boot_image_url:
+        description: 'Direct URL to boot.img, vendor_boot.img, recovery.img, or dtbo.img'
+        required: true
+        type: string
+      decompile_dtb:
+        description: 'Decompile DTB/DTBO to human-readable DTS source via dtc'
+        required: false
+        type: boolean
+        default: true
+      extract_defconfig:
+        description: 'Extract running kernel .config via ikconfig'
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  unpack-boot:
+    name: Unpack Boot & Decompile DTB
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Dependencies
+        run: |
+          sudo apt-get update -y || true
+          sudo apt-get install -y device-tree-compiler curl gzip lz4 python3
+          chmod +x setup_env.sh tools/* 2>/dev/null || true
+
+      - name: Download Boot Image
+        run: |
+          mkdir -p work/boot_input
+          curl -L -C - --retry 3 -o work/boot_input/target_boot.img "${{ inputs.boot_image_url }}"
+          ls -lh work/boot_input/
+
+      - name: Execute Boot Engine
+        run: |
+          mkdir -p out/boot_unpacked
+          python3 extractor/boot_engine.py work/boot_input/target_boot.img out/boot_unpacked
+          ls -lh out/boot_unpacked/
+
+      - name: Upload Boot Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot-extracted-assets
+          path: out/boot_unpacked/
+
+      - name: Post Job Summary
+        run: |
+          cat << 'EOF' >> $GITHUB_STEP_SUMMARY
+          ## Boot & Device Tree Analysis Finished
+          - **Input URL:** `${{ inputs.boot_image_url }}`
+          - **DTB Decompilation:** `${{ inputs.decompile_dtb }}`
+          - **Kernel defconfig Extraction:** `${{ inputs.extract_defconfig }}`
+
+          Assets extracted:
+          - Kernel Binary (`Image.gz` / `kernel`)
+          - Ramdisk (`ramdisk.cpio`)
+          - Device Tree Blobs (`dtb`, `dtbo`)
+          - Decompiled Device Tree Source (`decompiled_board.dts`)
+          - Kernel Config (`kernel_defconfig`)
+          EOF

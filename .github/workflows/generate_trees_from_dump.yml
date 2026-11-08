@@ -1,0 +1,135 @@
+name: Generate Trees from Existing Dump
+
+on:
+  workflow_dispatch:
+    inputs:
+      dump_repo_url:
+        description: 'GitHub Dump Repository URL (e.g. https://github.com/AndroidDumps/google_lynx-dump.git)'
+        required: true
+        type: string
+      rom_type:
+        description: 'Target Custom ROM Flavor'
+        required: true
+        type: choice
+        options:
+          - lineageos
+          - pixelos
+          - crdroid
+          - evolutionx
+          - twrp
+          - all
+        default: lineageos
+      push_to_github:
+        description: 'Automatically push generated Device, Vendor, and Kernel trees to GitHub'
+        required: true
+        type: boolean
+        default: true
+      target_account:
+        description: 'Target GitHub username or organization for tree repos (leave blank for repository owner)'
+        required: false
+        type: string
+        default: ''
+      branch_name:
+        description: 'Git branch name for generated trees'
+        required: false
+        type: string
+        default: 'lineage-21.0'
+      generate_manifest:
+        description: 'Generate .repo/local_manifests/roomservice.xml'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  generate-trees:
+    name: Generate Multi-ROM Trees from Dump
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Toolchain & Dependencies
+        run: |
+          chmod +x setup_env.sh run.sh main.py scripts/*.sh
+          ./setup_env.sh
+
+      - name: Clone Dump Repository
+        run: |
+          mkdir -p out/dump
+          echo "[INFO] Cloning existing dump repository: ${{ inputs.dump_repo_url }}..."
+          git clone --depth 1 "${{ inputs.dump_repo_url }}" out/dump
+
+      - name: Generate Multi-ROM Trees
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          TARGET="${{ inputs.target_account }}"
+          if [ -z "$TARGET" ]; then
+            TARGET="${{ github.repository_owner }}"
+          fi
+
+          CMD_ARGS=(
+            --dump-dir out/dump
+            --rom-type "${{ inputs.rom_type }}"
+            --target-org "$TARGET"
+            --branch "${{ inputs.branch_name }}"
+          )
+
+          if [ "${{ inputs.push_to_github }}" = "true" ]; then
+            CMD_ARGS+=(--push-github)
+          fi
+
+          if [ "${{ inputs.generate_manifest }}" = "true" ]; then
+            CMD_ARGS+=(--generate-manifest)
+          fi
+
+          python3 main.py "${CMD_ARGS[@]}"
+
+      - name: Upload Device Tree Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: device-tree-${{ inputs.rom_type }}
+          path: out/trees/device/
+          if-no-files-found: ignore
+
+      - name: Upload Vendor Tree Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vendor-tree
+          path: out/trees/vendor/
+          if-no-files-found: ignore
+
+      - name: Upload Kernel Tree Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-tree
+          path: out/trees/kernel/
+          if-no-files-found: ignore
+
+      - name: Upload Roomservice Manifest Artifact
+        if: ${{ inputs.generate_manifest }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: roomservice-manifest
+          path: out/roomservice.xml
+          if-no-files-found: ignore
+
+      - name: Post Job Summary
+        run: |
+          cat << 'EOF' >> $GITHUB_STEP_SUMMARY
+          ## Multi-ROM Tree Generation Summary
+          - **Source Dump:** `${{ inputs.dump_repo_url }}`
+          - **Target ROM Flavor:** `${{ inputs.rom_type }}`
+          - **Pushed to GitHub:** `${{ inputs.push_to_github }}`
+          - **Target Account:** `${{ inputs.target_account || github.repository_owner }}`
+          - **Target Branch:** `${{ inputs.branch_name }}`
+
+          Download the device, vendor, kernel, and roomservice artifacts above!
+          EOF
