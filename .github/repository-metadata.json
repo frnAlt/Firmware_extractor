@@ -1,0 +1,24 @@
+{
+  "name": "Firmware_extractor",
+  "description": "Universal Android firmware dumper, partition unpacker, and automated AOSP / LineageOS device & vendor tree generator with GitHub Actions automation.",
+  "homepage": "https://github.com/AndroidDumps/Firmware_extractor",
+  "topics": [
+    "android",
+    "aosp",
+    "lineageos",
+    "custom-rom",
+    "device-tree",
+    "vendor-tree",
+    "firmware-extractor",
+    "payload-dumper",
+    "super-img",
+    "erofs",
+    "dumpyara",
+    "rom-development",
+    "github-actions"
+  ],
+  "private": false,
+  "has_issues": true,
+  "has_projects": true,
+  "has_wiki": true
+}
