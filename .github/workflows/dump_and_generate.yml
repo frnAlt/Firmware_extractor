@@ -1,0 +1,125 @@
+name: Universal Firmware Extractor & AOSP Tree Generator
+
+on:
+  workflow_dispatch:
+    inputs:
+      firmware_url:
+        description: 'Direct URL to Stock ROM / OTA / payload.bin / Google Drive / SourceForge'
+        required: true
+        type: string
+      generate_trees:
+        description: 'Generate AOSP and LineageOS device and vendor trees'
+        required: true
+        type: boolean
+        default: true
+      push_to_github:
+        description: 'Automatically create and push device & vendor trees to GitHub'
+        required: true
+        type: boolean
+        default: true
+      target_org_or_user:
+        description: 'Target GitHub username or organization (leave blank for repository owner)'
+        required: false
+        type: string
+        default: ''
+      branch_name:
+        description: 'Git branch name for generated trees'
+        required: false
+        type: string
+        default: 'lineage-21.0'
+      upload_dump_release:
+        description: 'Compress and upload raw partition images to GitHub Releases'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  extract-and-generate:
+    name: Extract Firmware & Generate Trees
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Free Runner Disk Space (Reclaim ~35GB+)
+        run: |
+          echo "=== Disk Space Before Cleanup ==="
+          df -h /
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          sudo docker image prune --all --force || true
+          sudo apt-get clean || true
+          echo "=== Disk Space After Cleanup ==="
+          df -h /
+
+      - name: Setup Toolchain & Dependencies
+        run: |
+          chmod +x setup_env.sh run.sh scripts/*.sh
+          ./setup_env.sh
+
+      - name: Execute Firmware Extractor & Tree Generator
+        id: run_pipeline
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          TARGET_ACCOUNT="${{ inputs.target_org_or_user }}"
+          if [ -z "$TARGET_ACCOUNT" ]; then
+            TARGET_ACCOUNT="${{ github.repository_owner }}"
+          fi
+
+          CMD_ARGS=(
+            --url "${{ inputs.firmware_url }}"
+            --target-org "$TARGET_ACCOUNT"
+            --branch "${{ inputs.branch_name }}"
+          )
+
+          if [ "${{ inputs.generate_trees }}" = "false" ]; then
+            CMD_ARGS+=(--no-trees)
+          fi
+
+          if [ "${{ inputs.push_to_github }}" = "true" ]; then
+            CMD_ARGS+=(--push-github)
+          fi
+
+          ./run.sh "${CMD_ARGS[@]}"
+
+      - name: Archive and Upload Device Tree Artifact
+        if: ${{ inputs.generate_trees }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: aosp-device-tree
+          path: out/trees/device/
+          if-no-files-found: ignore
+
+      - name: Archive and Upload Vendor Tree Artifact
+        if: ${{ inputs.generate_trees }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: aosp-vendor-tree
+          path: out/trees/vendor/
+          if-no-files-found: ignore
+
+      - name: Post Job Summary
+        run: |
+          cat << 'EOF' >> $GITHUB_STEP_SUMMARY
+          ## Universal Firmware Extractor Run Summary
+          - **Firmware URL:** `${{ inputs.firmware_url }}`
+          - **Trees Generated:** `${{ inputs.generate_trees }}`
+          - **GitHub Push Enabled:** `${{ inputs.push_to_github }}`
+          - **Target Account:** `${{ inputs.target_org_or_user || github.repository_owner }}`
+          - **Target Branch:** `${{ inputs.branch_name }}`
+
+          ### Extracted Output
+          Check the action artifacts above for downloadable archives of your generated `device` and `vendor` trees!
+          EOF
